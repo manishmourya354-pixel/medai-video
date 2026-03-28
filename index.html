@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Med-AI Cloud Consultation</title>
-
+    <title>Med-AI Cloud Webpage</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
         .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 15px; border: 1px solid #4CAF50; }
@@ -13,116 +12,109 @@
         button:disabled { background: #2e7d32; cursor: not-allowed; }
         #status { font-size: 14px; padding: 10px; border-radius: 5px; background: #333; color: #4CAF50; }
     </style>
-
-    <!-- ✅ SUPABASE CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-
 <body>
 
 <div class="container">
     <h2>🎥 Med-AI Cloud Consultation</h2>
     
+    <!-- IMPORTANT: muted + playsinline mobile ke liye -->
     <video id="remoteVideo" autoplay playsinline muted></video>
     
     <button id="startBtn" onclick="startCloudCall()">START CONSULTATION</button>
     <div id="status">Status: Ready to Connect</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SB_URL = "https://ycrdefpwrczggakgqbdu.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmRlZnB3cmN6Z2dha2dxYmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDgzOTYsImV4cCI6MjA4OTQ4NDM5Nn0.S-bTToMacfarCcGYoOVHrO0r7rhz8dZUrCW-kkrUf8A";
+    const SB_URL = "https://ycrdefpwrczggakgqbdu.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmRlZnB3cmN6Z2dha2dxYmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDgzOTYsImV4cCI6MjA4OTQ4NDM5Nn0.S-bTToMacfarCcGYoOVHrO0r7rhz8dZUrCW-kkrUf8A";
+    const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+    const ROOM_ID = "medai_room_1";
 
-const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+    let pc;
 
-const ROOM_ID = "medai_room_1";
+    window.startCloudCall = async function () {
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const video = document.getElementById('remoteVideo');
 
-let pc;
+        startBtn.disabled = true;
+        status.innerText = "Status: Accessing Camera...";
 
-window.startCloudCall = async function () {
-    const status = document.getElementById('status');
-    const startBtn = document.getElementById('startBtn');
-    const video = document.getElementById('remoteVideo');
+        try {
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            });
 
-    startBtn.disabled = true;
-    status.innerText = "Status: Accessing Camera...";
+            pc.ontrack = (event) => {
+                video.srcObject = event.streams[0];
+                video.play().catch(() => {});
+                status.innerText = "Status: Connected & Streaming!";
+            };
 
-    try {
-        pc = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
-            ]
-        });
-
-        pc.ontrack = (event) => {
-            video.srcObject = event.streams[0];
-            video.play().catch(() => {});
-            status.innerText = "Status: Connected & Streaming!";
-        };
-
-        pc.onicecandidate = async (event) => {
-            if (event.candidate) {
-                await supabase.from('signaling').insert({
-                    room_id: ROOM_ID,
-                    type: 'candidate',
-                    data: event.candidate
-                });
-            }
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-        });
-
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        status.innerText = "Status: Sending Offer...";
-
-        const { error } = await supabase.from('signaling').insert({
-            room_id: ROOM_ID,
-            type: 'offer',
-            data: { sdp: offer.sdp, type: offer.type }
-        });
-
-        if (error) throw error;
-
-        status.innerText = "Status: Waiting for Answer...";
-
-        setInterval(async () => {
-            const { data } = await supabase
-                .from('signaling')
-                .select('*')
-                .eq('room_id', ROOM_ID);
-
-            if (!data) return;
-
-            for (let row of data) {
-                if (row.type === 'answer') {
-                    await pc.setRemoteDescription(new RTCSessionDescription(row.data));
-                    await supabase.from('signaling').delete().eq('id', row.id);
-                    status.innerText = "Status: Connecting...";
+            pc.onicecandidate = async (event) => {
+                if (event.candidate) {
+                    await supabase.from('signaling').insert({
+                        room_id: ROOM_ID,
+                        type: 'candidate',
+                        data: event.candidate
+                    });
                 }
+            };
 
-                if (row.type === 'candidate') {
-                    try {
-                        await pc.addIceCandidate(new RTCIceCandidate(row.data));
-                    } catch {}
-                    await supabase.from('signaling').delete().eq('id', row.id);
+            // mobile pe audio optional rakho
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            status.innerText = "Status: Sending Offer...";
+
+            const { error } = await supabase.from('signaling').insert({
+                room_id: ROOM_ID,
+                type: 'offer',
+                data: { sdp: offer.sdp, type: offer.type }
+            });
+
+            if (error) throw error;
+
+            status.innerText = "Status: Waiting for Answer...";
+
+            const checkInterval = setInterval(async () => {
+                const { data } = await supabase
+                    .from('signaling')
+                    .select('*')
+                    .eq('room_id', ROOM_ID);
+
+                if (!data) return;
+
+                for (let row of data) {
+                    if (row.type === 'answer') {
+                        await pc.setRemoteDescription(new RTCSessionDescription(row.data));
+                        await supabase.from('signaling').delete().eq('id', row.id);
+                        status.innerText = "Status: Connecting...";
+                    }
+
+                    if (row.type === 'candidate') {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(row.data));
+                        } catch {}
+                        await supabase.from('signaling').delete().eq('id', row.id);
+                    }
                 }
-            }
-        }, 2000);
+            }, 2000);
 
-    } catch (e) {
-        console.error(e);
-        status.innerText = "Error: " + e.message;
-        status.style.color = "#ff5252";
-        startBtn.disabled = false;
-    }
-};
+        } catch (e) {
+            console.error(e);
+            status.innerText = "Error: " + e.message;
+            status.style.color = "#ff5252";
+            startBtn.disabled = false;
+        }
+    };
 </script>
 
 </body>
