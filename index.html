@@ -25,13 +25,11 @@
     <div id="status">Status: Ready to Connect</div>
 </div>
 
-<script type="module">
-    // FIX: more reliable CDN for mobile
-    import { createClient } from "https://esm.sh/@supabase/supabase-js";
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
     const SB_URL = "https://ycrdefpwrczggakgqbdu.supabase.co";
-    const SB_KEY ="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmRlZnB3cmN6Z2dha2dxYmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDgzOTYsImV4cCI6MjA4OTQ4NDM5Nn0.S-bTToMacfarCcGYoOVHrO0r7rhz8dZUrCW-kkrUf8A";
-
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcmRlZnB3cmN6Z2dha2dxYmR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MDgzOTYsImV4cCI6MjA4OTQ4NDM5Nn0.S-bTToMacfarCcGYoOVHrO0r7rhz8dZUrCW-kkrUf8A";
+    const supabase = window.supabase.createClient(SB_URL, SB_KEY);
     const ROOM_ID = "medai_room_1";
 
     let pc;
